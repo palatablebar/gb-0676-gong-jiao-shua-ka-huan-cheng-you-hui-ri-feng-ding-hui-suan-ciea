@@ -13,6 +13,7 @@
 | M5 优惠回算 | 查看并运行优惠回算 | `/api/discounts` | `app/modules/m5_discounts/rules.py` | `tests/test_m5.py` |
 | M6 清分对账 | 查看并运行清分对账 | `/api/clearing` | `app/modules/m6_clearing/rules.py` | `tests/test_m6.py` |
 | M7 日结归档 | 查看并运行日结归档 | `/api/settlement` | `app/modules/m7_settlement/rules.py` | `tests/test_m7.py` |
+| M8 时钟校核 | 提交校时单、补发入账、封存日结 | `/api/runs/<id>/corrections`、`/api/runs/<id>/seal` | `app/modules/m8_clock/rules.py` | `tests/test_m8.py` |
 
 ## 陷阱登记
 
@@ -31,10 +32,14 @@
 | TRAP-11 | 混合偏移 | 落错版本 | UTC归整 | `app/values.py` | `tests/test_m3.py::test_timezone_equal` |
 | TRAP-23 | 换乘截止点 | 重复优惠 | 截止点排除 | `app/modules/m5_discounts/rules.py` | `tests/test_m5.py::test_exact_window_excluded` |
 | TRAP-25 | 票价重叠 | 随意取版 | 冲突隔离 | `app/modules/m3_fares/rules.py` | `tests/test_m3.py::test_overlap_rejected` |
+| TRAP-27 | 车载钟漂移 | 边缘换乘误判分段 | 以核清校时重算窗口 | `app/modules/m8_clock/rules.py` | `tests/test_m8.py::test_window_adjudicated_on_verified_clock` |
+| TRAP-28 | 补发重跑 | 重复改账 | 批次摘要幂等与台账主键 | `app/store.py` | `tests/test_m8.py::test_reissue_never_double_books` |
+| TRAP-29 | 未核清封存 | 日结提前封存 | 封存前校验最新校时状态 | `app/store.py` | `tests/test_m8.py::test_seal_blocked_until_clock_verified` |
+| TRAP-30 | 校时失败 | 覆盖旧版结果 | 失败仅留痕不改账 | `app/modules/m8_clock/rules.py` | `tests/test_m8.py::test_failed_correction_keeps_old_version` |
 
 ## 对账规则
 
-输入原始逻辑行=最终采纳来源行+隔离来源行+重复行+空白行+分段表头。派生记录用_sources保存完整来源，因此分组不丢行。业务预期合计与上游申报合计之差等于逐行差异之和。结果按输入摘要、规则版本及参数产生唯一批次，事务写入；同源重跑只复用已有批次。
+输入原始逻辑行=最终采纳来源行+隔离来源行+重复行+空白行+分段表头。派生记录用_sources保存完整来源，因此分组不丢行。业务预期合计与上游申报合计之差等于逐行差异之和。结果按输入摘要、规则版本及参数产生唯一批次，事务写入；同源重跑只复用已有批次。校时批次按运行号与校时单内容摘要唯一，核清与台账写入同事务；台账以（运行，卡，业务日）为主键，调整额始终相对原批次基线计算，重复提交与补发不产生第二笔账。
 
 ## 已知不覆盖
 
